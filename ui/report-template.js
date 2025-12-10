@@ -1,62 +1,66 @@
-// ui/report-template.js
+// ...existing code...
+function numberWithCommas(x){
+  if (x === undefined || x === null) return '0';
+  return String(x).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]); });
+}
+
 export function createReportHtml(reportData) {
-  // simple computations
-  const posts = reportData.posts || [];
-  const totalPosts = posts.length;
-  const totalImpressions = posts.reduce((s,p) => s + (p.impressions || 0), 0);
-  const totalLikes = posts.reduce((s,p) => s + (p.likes || 0), 0);
-  const totalComments = posts.reduce((s,p) => s + (p.comments || 0), 0);
+  console.log('[report-template] createReportHtml called', reportData);
+  const posts = reportData?.posts || reportData?.topPosts || [];
+  const profileStats = reportData?.profileStats || {};
 
-  const mostLiked = posts.slice().sort((a,b) => (b.likes || 0) - (a.likes || 0))[0];
-  const mostImpressions = posts.slice().sort((a,b) => (b.impressions || 0) - (a.impressions || 0))[0];
+  const totalImpressions = Number(
+    profileStats.impressions != null
+      ? profileStats.impressions
+      : posts.reduce((s, p) => s + (Number(p.impressions) || 0), 0)
+  ) || 0;  
+  const membersReached = Number(profileStats.membersReached ?? 0);
 
-  // hashtags frequency
-  const hashtagCounts = {};
-  posts.forEach(p => {
-    const txt = p.text || '';
-    const matches = txt.match(/#\w+/g) || [];
-    matches.forEach(h => hashtagCounts[h.toLowerCase()] = (hashtagCounts[h.toLowerCase()] || 0) + 1);
-  });
-  const topHashtags = Object.entries(hashtagCounts).sort((a,b) => b[1]-a[1]).slice(0,5);
+  // compute top post by impressions
+  const mostImpressions = posts.slice().sort((a,b) => (b.impressions||0) - (a.impressions||0))[0];
 
-  const cardsHtml = [];
-
-  function card(title, contentHtml){
+  function card(title, contentHtml) {
     return `<div class="rounded-3xl p-6 shadow-xl bg-gradient-to-br from-indigo-700 to-rose-500/60 text-white mb-6">
-      <h2 class="text-sm uppercase tracking-widest text-white/90">${title}</h2>
+      <h2 class="text-sm uppercase tracking-widest text-white/90">${escapeHtml(title)}</h2>
       <div class="mt-3 text-3xl font-extrabold">${contentHtml}</div>
     </div>`;
   }
 
-  // card: summary
-  cardsHtml.push(card('Year in numbers', `
+  const cards = [];
+
+  // Year in numbers: only Total Impressions and Members Reached
+  cards.push(card('Year in numbers', `
     <div class="grid grid-cols-2 gap-4">
-      <div class="text-center"><div class="text-5xl">${totalPosts}</div><div class="text-sm">Posts</div></div>
-      <div class="text-center"><div class="text-5xl">${numberWithCommas(totalImpressions)}</div><div class="text-sm">Impressions</div></div>
-      <div class="text-center"><div class="text-5xl">${numberWithCommas(totalLikes)}</div><div class="text-sm">Likes</div></div>
-      <div class="text-center"><div class="text-5xl">${numberWithCommas(totalComments)}</div><div class="text-sm">Comments</div></div>
+      <div class="text-center">
+        <div class="text-5xl">${numberWithCommas(totalImpressions || 0)}</div>
+        <div class="text-sm">Total impressions</div>
+      </div>
+      <div class="text-center">
+        <div class="text-5xl">${numberWithCommas(membersReached)}</div>
+        <div class="text-sm">Members reached</div>
+      </div>
     </div>
   `));
 
-  // card: most liked
-  if (mostLiked) {
-    cardsHtml.push(card('Post with most impression', `<div class="text-base font-medium max-w-prose">${escapeHtml(mostLiked.text || '(no text)')}</div>
-      <div class="mt-3 text-sm">Likes: ${numberWithCommas(mostLiked.likes||0)} · Comments: ${numberWithCommas(mostLiked.comments||0)} · Impressions: ${numberWithCommas(mostLiked.impressions||0)}</div>`));
+  // Top post by impressions (show impressions, likes, comments)
+  if (mostImpressions) {
+    const p = mostImpressions;
+    const postText = escapeHtml((p.text || '').slice(0, 280) || '(no text)');
+    const impressionsTxt = numberWithCommas(p.impressions || 0);
+    const likesTxt = numberWithCommas(p.likes || 0);
+    const commentsTxt = numberWithCommas(p.comments || 0);
+
+    cards.push(card('Top post by impressions', `
+      <div class="max-w-prose text-base font-medium mb-3">${postText}</div>
+      <div class="text-sm text-white/90">Impressions: <strong>${impressionsTxt}</strong> · Likes: <strong>${likesTxt}</strong> · Comments: <strong>${commentsTxt}</strong></div>
+      ${p.link ? `<div class="mt-3 text-xs text-white/70">Source: <a href="${escapeHtml(p.link)}" target="_blank" rel="noopener" class="underline">${escapeHtml(p.link)}</a></div>` : ''}
+    `));
   }
 
-  // card: most impressions
-  if (mostImpressions && mostImpressions !== mostLiked) {
-    cardsHtml.push(card('Most impressions', `<div class="text-base font-medium max-w-prose">${escapeHtml(mostImpressions.text || '(no text)')}</div>
-      <div class="mt-3 text-sm">Impressions: ${numberWithCommas(mostImpressions.impressions||0)} · Likes: ${numberWithCommas(mostImpressions.likes||0)}</div>`));
-  }
-
-  // card: top hashtags
-  const hashtagsHtml = topHashtags.length ? topHashtags.map(h=>`<div class="inline-block mr-2 px-3 py-1 rounded-full bg-white/20">${escapeHtml(h[0])} · ${h[1]}</div>`).join('') : '<div class="text-sm text-white/80">No hashtags detected</div>';
-  cardsHtml.push(card('Top hashtags', hashtagsHtml));
-
-  // build page
-  const html = `
-  <!doctype html>
+  const html = `<!doctype html>
   <html>
   <head>
     <meta charset="utf-8" />
@@ -77,7 +81,7 @@ export function createReportHtml(reportData) {
       </div>
 
       <div>
-        ${cardsHtml.join('\n')}
+        ${cards.join('\n')}
       </div>
 
       <div class="mt-8 text-sm text-slate-300">
@@ -90,7 +94,7 @@ export function createReportHtml(reportData) {
 
     <script src="https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script>
-      function numberWithCommas(x){ return x.toString().replace(/\B(?=(\\d{3})+(?!\\d))/g, ","); }
+      function numberWithCommas(x){ if (x === undefined || x === null) return '0'; return String(x).replace(/\\B(?=(\\d{3})+(?!\\d))/g, ","); }
       document.getElementById('exportAll').addEventListener('click', async () => {
         const cards = Array.from(document.querySelectorAll('.rounded-3xl'));
         for (let i=0;i<cards.length;i++){
@@ -105,16 +109,15 @@ export function createReportHtml(reportData) {
       });
     </script>
   </body>
-  </html>
-  `;
+  </html>`;
 
   return html;
 }
 
-function numberWithCommas(x){
-  if (x === undefined || x === null) return '0';
-  return String(x).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+if (typeof window !== 'undefined') {
+  window.__TEST_createReportHtml = (data) => {
+    try { const out = createReportHtml(data); console.log('[report-template] html length', out.length); return out; }
+    catch (e) { console.error('[report-template] test error', e); return null; }
+  };
 }
-function escapeHtml(s){
-  return String(s).replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]); });
-}
+// ...existing code...

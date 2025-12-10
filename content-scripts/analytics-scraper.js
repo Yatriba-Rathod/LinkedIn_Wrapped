@@ -180,6 +180,69 @@
   //   return stats;
   // }
 
+  function parseContentImpressionsPage() {
+    const stats = {};
+
+    // 1) Prefer the structured "Discovery" block if present
+    const discoveryUl = document.querySelector('ul.member-analytics-addon-summary');
+    if (discoveryUl) {
+      const items = Array.from(discoveryUl.querySelectorAll('li.member-analytics-addon-summary__list-item'));
+      for (const li of items) {
+        // value element shown in your HTML: <p class="text-body-medium-bold pr1 text-heading-large">30,036</p>
+        const valueEl = li.querySelector('p.text-body-medium-bold, p.text-heading-large, .text-heading-large, p');
+        const labelEl = li.querySelector('p.member-analytics-addon-list-item__description, .member-analytics-addon-list-item__description');
+        const rawVal = (valueEl?.innerText || '').replace(/\u00A0/g, ' ').trim();
+        const label = (labelEl?.innerText || '').trim().toLowerCase();
+
+        if (rawVal) {
+          const n = parseNumber(rawVal);
+          if (n != null) {
+            if (/impressions?/i.test(label) || label.includes('impressions')) {
+              stats.impressions = n;
+            } else if (/members?\s+reached/i.test(label) || label.includes('members reached')) {
+              stats.membersReached = n;
+            } else {
+              // if label absent, try to infer by order: first -> impressions, second -> members reached
+              if (stats.impressions == null) stats.impressions = n;
+              else if (stats.membersReached == null) stats.membersReached = n;
+            }
+          }
+        }
+      }
+
+      // ensure numbers are Number typed
+      if (stats.impressions != null) stats.impressions = Number(stats.impressions);
+      if (stats.membersReached != null) stats.membersReached = Number(stats.membersReached);
+
+      // return early if we found at least impressions (and ideally membersReached)
+      if (stats.impressions != null || stats.membersReached != null) return stats;
+    }
+
+    // 2) Fallback to document-wide heuristics (existing robust logic)
+    // (keep your prior collect/label heuristics)
+    // ...existing fallback code...
+    // reuse previously implemented helper logic:
+    const fallback = (function() {
+      const res = {};
+      const impEls = findElementsByText(/\bimpressions\b/i);
+      for (const el of impEls) {
+        const n = extractNearbyNumber(el);
+        if (n != null) { res.impressions = n; break; }
+      }
+      const mrEls = findElementsByText(/members?\s+reached/i);
+      for (const el of mrEls) {
+        const n = extractNearbyNumber(el);
+        if (n != null) { res.membersReached = n; break; }
+      }
+      return res;
+    })();
+
+    if (fallback.impressions != null) stats.impressions = fallback.impressions;
+    if (fallback.membersReached != null) stats.membersReached = fallback.membersReached;
+
+    return stats;
+  }
+
   (async function run() {
     await stabilize();
     const url = location.href;
@@ -189,6 +252,9 @@
       if (url.includes('/analytics/creator/top-posts')) {
         payload.topPosts = parseTopPostsFromCreatorPage();
         payload.meta.page = 'creator-top-posts';
+      } else if (url.includes('/analytics/creator/content')) {
+        payload.profileStats = parseContentImpressionsPage();
+        payload.meta.page = 'creator-content-impressions';
       // } else if (url.includes('/detail/recent-activity/shares') || url.includes('/recent-activity')) {
       //   payload.topPosts = parseRecentActivitySharesPage();
       //   payload.meta.page = 'recent-activity-shares';
