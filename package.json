@@ -1,0 +1,16 @@
+{
+  "name": "linkedin-wrap",
+  "version": "1.0.0",
+  "description": "1. Open Chrome and go to `chrome://extensions`\r 2. Enable Developer mode\r 3. Click \"Load unpacked\" and select the `linkedin-wrapped` folder\r 4. Ensure you're logged into LinkedIn in this browser",
+  "main": "background.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "tailwindcss": "^4.1.17"
+  }
+}
