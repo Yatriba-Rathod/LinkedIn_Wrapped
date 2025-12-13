@@ -30,11 +30,6 @@ function buildAnalyticsUrls(username) {
     // Top posts analytics page (past 365 days param included optionally)
     `https://www.linkedin.com/analytics/creator/top-posts/?timeRange=past_365_days`,
     `https://www.linkedin.com/analytics/creator/content/?endDate=2025-12-10&metricType=IMPRESSIONS&startDate=2024-12-11&timeRange=past_365_days`
-    // Recent activity (shares)
-    // `https://www.linkedin.com/in/${username}/detail/recent-activity/shares/`,
-    // Profile analytics / views
-    // `https://www.linkedin.com/analytics/profile-views/`
-    // you can add more pages here if needed
   ];
 }
 
@@ -43,7 +38,7 @@ async function injectScraper(tabId) {
   try {
     await chrome.scripting.executeScript({
       target: { tabId },
-      files: ['content-scripts/analytics-scraper.js']
+      files: ['analytics-scraper.js']
     });
     log(`Injected scraper into tab ${tabId}`);
   } catch (err) {
@@ -119,7 +114,7 @@ startBtn.addEventListener('click', async () => {
     setStatus(`Collected ${collected.length} data chunks. Building report...`);
     // Build report HTML using ui/report-template.js createReportHtml(reportData)
     // We'll create a blob and open in new tab
-    import('./ui/report-template.js').then(mod => {
+    import('../report/report-template.js').then(mod => {
       try {
         const reportData = normalizeCollected(collected);
         const html = mod.createReportHtml(reportData);

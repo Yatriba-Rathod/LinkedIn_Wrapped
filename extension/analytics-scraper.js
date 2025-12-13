@@ -5,6 +5,7 @@
   const wait = ms => new Promise(r => setTimeout(r, ms));
   const nowISO = () => new Date().toISOString();
 
+  // Helper function if not already defined
   function parseNumber(s) {
     if (s === null || s === undefined) return null;
     const cleaned = String(s).replace(/[^\d\.\,]/g, '').replace(/,/g, '');
@@ -16,9 +17,9 @@
   async function stabilize() {
     for (let i = 0; i < 8; i++) {
       if (document.readyState === 'complete') break;
-      await wait(300);
+      await wait(600);
     }
-    await wait(600);
+    await wait(900);
   }
 
   function parseTopPostsFromCreatorPage() {
@@ -75,35 +76,39 @@
     return out;
   }
 
-  // 🔥 NEW BLOCK START — FINAL WORKING IMPRESSIONS PARSER
   function parseContentImpressionsPage() {
     const stats = {};
 
-    try {
-      // 🔥 Only select the section whose header is EXACTLY "Discovery"
-      const discoveryHeader = Array.from(document.querySelectorAll("h2"))
-        .find(h2 => h2.innerText.trim().toLowerCase() === "discovery");
+    try {      
+      // Find the Discovery section
+      const allH2s = Array.from(document.querySelectorAll("h2"));
+      console.log("[scraper] Found h2 elements:", allH2s.length);
+      allH2s.forEach((h2, i) => console.log(`[scraper] h2[${i}]:`, h2.innerText.trim()));
+      
+      const discoveryHeader = allH2s.find(h2 => h2.innerText.trim().toLowerCase() === "discovery");
 
       if (!discoveryHeader) {
         console.log("[scraper] Discovery header not found");
         return stats;
       }
+      console.log("[scraper] Found Discovery header");
 
-      // The UL we want is inside the same card container
       const discoverySection = discoveryHeader.closest("section");
-
       if (!discoverySection) {
         console.log("[scraper] Discovery section not found");
         return stats;
       }
+      console.log("[scraper] Found Discovery section");
 
       const ul = discoverySection.querySelector("ul.member-analytics-addon-summary");
-
       if (!ul) {
-        console.log("[scraper] Discovery UL not found inside the correct section");
+        console.log("[scraper] Discovery UL not found");
+        // Try alternative: just look for any li items in the section
+        const allLis = discoverySection.querySelectorAll("li");
+        console.log("[scraper] Found", allLis.length, "li elements in section (without UL class)");
         return stats;
       }
-
+      console.log("[scraper] Found UL element");
 
       const items = Array.from(
         ul.querySelectorAll("li.member-analytics-addon-summary__list-item")
@@ -111,52 +116,105 @@
 
       console.log("[scraper] found list items:", items.length);
 
-      items.forEach((li) => {
+      items.forEach((li, index) => {
+        console.log(`[scraper] === Processing item ${index} ===`);
+        
+        // Try to find ANY p tag with a number-like value
+        const allPTags = li.querySelectorAll("p");
+        console.log(`[scraper] Item ${index} has ${allPTags.length} p tags`);
+        
+        allPTags.forEach((p, pIndex) => {
+          console.log(`[scraper] p[${pIndex}] classes:`, p.className);
+          console.log(`[scraper] p[${pIndex}] textContent:`, p.textContent.trim());
+          console.log(`[scraper] p[${pIndex}] innerHTML:`, p.innerHTML);
+        });
 
-        // 🔥 CHANGED LINE — Correct selectors for the value element
+        // Get the value - try multiple selectors
         const valueP = li.querySelector(
-          "p.text-body-medium-bold, p.text-heading-large"
+          "p.text-body-medium-bold, p.text-heading-large, p.text-body-medium-bold.pr1.text-heading-large, p[class*='text-heading']"
         );
 
         let raw = "";
         if (valueP) {
+          // First try direct textContent
           raw = valueP.textContent.trim();
-
+          
+          // If empty, try innerHTML and strip HTML comments
           if (!raw) {
-            // 🔥 CHANGED LINE — Properly unwrap HTML comments
-            raw = valueP.innerHTML.replace(/<!--\s*(.*?)\s*-->/g, "$1").trim();
+            const innerHTML = valueP.innerHTML;
+            // Remove HTML comments: <!--something-->
+            raw = innerHTML.replace(/<!--\s*/g, '').replace(/\s*-->/g, '').trim();
           }
+          
+          console.log("[scraper] raw value extracted:", raw);
+        } else {
+          console.log("[scraper] No value element found!");
         }
 
         const number = parseNumber(raw);
+        console.log("[scraper] parsed number:", number);
 
-        // 🔥 CHANGED LINE — Correct selector for label element
+        // Get the label
         const labelP = li.querySelector(
-          "p.member-analytics-addon-list-item__description"
+          "p.member-analytics-addon-list-item__description, p[class*='description']"
         );
 
-        let label = labelP
-          ? labelP.textContent.replace(/<!--\s*(.*?)\s*-->/g, "$1").trim()
-          : "";
+        let label = "";
+        if (labelP) {
+          // Try textContent first
+          label = labelP.textContent.trim();
+          
+          // If empty, strip HTML comments from innerHTML
+          if (!label) {
+            const innerHTML = labelP.innerHTML;
+            label = innerHTML.replace(/<!--\s*/g, '').replace(/\s*-->/g, '').trim();
+          }
+          console.log("[scraper] raw label:", label);
+        } else {
+          console.log("[scraper] No label element found!");
+        }
 
         label = label.toLowerCase();
 
-        console.log("[scraper] extracted:", { label, number });
+        console.log("[scraper] extracted:", { label, raw, number });
 
-        if (!number || !label) return;
+        if (!number) {
+          console.log("[scraper] skipping - no valid number");
+          return;
+        }
+        
+        if (!label) {
+          console.log("[scraper] WARNING: no label but have number:", number);
+        }
 
-        if (label.includes("impressions")) stats.impressions = number;
-        if (label.includes("members reached")) stats.membersReached = number;
+        // More flexible matching
+        if (label.includes("impression") || label.includes("total impression")) {
+          stats.impressions = number;
+          console.log("[scraper] SET impressions:", number);
+        }
+        else if (label.includes("members reached") || label.includes("reached")) {
+          stats.membersReached = number;
+          console.log("[scraper] SET membersReached:", number);
+        }
+        // Fallback: if we haven't set impressions yet and this is the first item
+        else if (!stats.impressions && index === 0) {
+          stats.impressions = number;
+          console.log("[scraper] SET impressions (fallback first item):", number);
+        }
+        // Fallback: if we have impressions but not members reached, and this is second item
+        else if (stats.impressions && !stats.membersReached && index === 1) {
+          stats.membersReached = number;
+          console.log("[scraper] SET membersReached (fallback second item):", number);
+        }
       });
 
-      console.log("[scraper] FINAL DISCOVERY STATS:", stats);
+      console.log("[scraper] === FINAL DISCOVERY STATS ===", stats);
       return stats;
     } catch (err) {
       console.error("[scraper] error in parseContentImpressionsPage:", err);
       return stats;
     }
   }
-  // 🔥 NEW BLOCK END
 
   (async function run() {
     await stabilize();
@@ -168,7 +226,6 @@
         payload.topPosts = parseTopPostsFromCreatorPage();
         payload.meta.page = 'creator-top-posts';
       } else if (url.includes('/analytics/creator/content')) {
-        // 🔥 CHANGED LINE — use new impressions parser
         payload.profileStats = parseContentImpressionsPage();
         payload.meta.page = 'creator-content-impressions';
       } else {

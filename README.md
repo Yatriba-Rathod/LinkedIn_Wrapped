@@ -11,7 +11,19 @@
 2. The extension will open LinkedIn analytics pages in tabs (or background) and run scrapers
 3. When finished, it opens a new tab with your Wrapped report
 4. Export cards as PNG using Export button
+5. No Node.js, npm, or build tools required. The extension ships with precompiled CSS (popup.css) and runs entirely locally.
 
 ## Notes & troubleshooting
 - The scraper relies on page DOM heuristics — if cards are empty, open DevTools on an analytics page and inspect selectors; update `content-scripts/analytics-scraper.js`.
 - Privacy: data is processed locally. The extension does not upload data by default.
+
+## Installation (Free – No Chrome Store)
+
+1. Download this repository as ZIP
+2. Unzip it
+3. Open `chrome://extensions`
+4. Enable **Developer Mode** (top-right)
+5. Click **Load unpacked**
+6. Select the `extension/` folder
+
+No Node.js, npm, or build tools required.

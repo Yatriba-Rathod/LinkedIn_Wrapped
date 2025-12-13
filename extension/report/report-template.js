@@ -1,4 +1,3 @@
-// ...existing code...
 function numberWithCommas(x){
   if (x === undefined || x === null) return '0';
   return String(x).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -10,7 +9,7 @@ function escapeHtml(s){
 export function createReportHtml(reportData) {
   console.log('[report-template] createReportHtml called', reportData);
   const posts = reportData?.posts || reportData?.topPosts || [];
-  const profileStats = reportData?.profileStats || {};
+  const profileStats = reportData?.stats || reportData?.profileStats || {};
 
   const totalImpressions = Number(
     profileStats.impressions != null
@@ -120,4 +119,3 @@ if (typeof window !== 'undefined') {
     catch (e) { console.error('[report-template] test error', e); return null; }
   };
 }
-// ...existing code...
