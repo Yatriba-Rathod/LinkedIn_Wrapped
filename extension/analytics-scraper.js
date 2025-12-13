@@ -17,9 +17,9 @@
   async function stabilize() {
     for (let i = 0; i < 8; i++) {
       if (document.readyState === 'complete') break;
-      await wait(600);
+      await wait(1200);
     }
-    await wait(900);
+    await wait(3000);
   }
 
   function parseTopPostsFromCreatorPage() {
