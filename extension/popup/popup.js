@@ -1,159 +1,279 @@
 // popup.js
-console.log('[popup] loaded');
+console.log('[popup] Loaded');
+
 const startBtn = document.getElementById('start');
 const statusEl = document.getElementById('status');
 const logEl = document.getElementById('log');
 const helpBtn = document.getElementById('help');
 
-function log(msg){
+function log(msg) {
   console.log('[popup]', msg);
-  logEl.innerText += msg + '\n';
+  const timestamp = new Date().toLocaleTimeString();
+  logEl.innerText += `[${timestamp}] ${msg}\n`;
   logEl.scrollTop = logEl.scrollHeight;
 }
 
-function setStatus(s){ statusEl.innerText = s; log(s); }
+function setStatus(s) {
+  statusEl.innerText = s;
+  log(s);
+}
 
-function extractUsername(url){
+function extractUsername(url) {
   try {
     const u = new URL(url);
     const parts = u.pathname.split('/').filter(Boolean);
-    // common pattern: /in/username
+    // Pattern: /in/username
     if (parts[0] === 'in' && parts[1]) return parts[1];
-    // fallback: first valid token
+    // Fallback
     return parts[0] || null;
-  } catch(e){ return null; }
+  } catch (e) {
+    return null;
+  }
 }
 
-// list of analytics URLs to scrape (templates). They rely on your session (must be logged in).
 function buildAnalyticsUrls(username) {
+  const today = new Date();
+  const endDate = today.toISOString().split('T')[0];
+  const startDate = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate())
+    .toISOString().split('T')[0];
+
   return [
-    // Top posts analytics page (past 365 days param included optionally)
     `https://www.linkedin.com/analytics/creator/top-posts/?timeRange=past_365_days`,
-    `https://www.linkedin.com/analytics/creator/content/?endDate=2025-12-10&metricType=IMPRESSIONS&startDate=2024-12-11&timeRange=past_365_days`
+    `https://www.linkedin.com/analytics/creator/content/?endDate=${endDate}&metricType=IMPRESSIONS&startDate=${startDate}&timeRange=past_365_days`
   ];
 }
 
-// inject scraper into tab
-async function injectScraper(tabId) {
+// Wait for a tab to finish loading
+async function waitForTabLoad(tabId, maxWait = 30000) {
+  const startTime = Date.now();
+  
+  return new Promise((resolve) => {
+    const checkStatus = () => {
+      chrome.tabs.get(tabId, (tab) => {
+        if (chrome.runtime.lastError) {
+          console.log('[popup] Tab no longer exists:', tabId);
+          resolve(false);
+          return;
+        }
+
+        if (tab.status === 'complete') {
+          console.log('[popup] Tab loaded:', tabId);
+          resolve(true);
+        } else if (Date.now() - startTime > maxWait) {
+          console.log('[popup] Tab load timeout:', tabId);
+          resolve(false);
+        } else {
+          setTimeout(checkStatus, 500);
+        }
+      });
+    };
+    
+    checkStatus();
+  });
+}
+
+// Convert image to data URL
+async function getIconAsDataURL() {
   try {
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      files: ['analytics-scraper.js']
+    const iconUrl = chrome.runtime.getURL('../assets/icons/icon128.png');
+    const response = await fetch(iconUrl);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
     });
-    log(`Injected scraper into tab ${tabId}`);
   } catch (err) {
-    log(`Failed to inject into ${tabId}: ${err.message}`);
+    console.error('[popup] failed to load icon', err);
+    return null;
   }
 }
 
 startBtn.addEventListener('click', async () => {
-  console.log('[popup] start button clicked');
+  console.log('[popup] Start button clicked');
+  
   const profileUrl = document.getElementById('profileUrl').value.trim();
-  if (!profileUrl) return alert('Please paste your LinkedIn profile URL.');
+  if (!profileUrl) {
+    alert('Please paste your LinkedIn profile URL.');
+    return;
+  }
 
-  // ensure background memory/storage cleared to avoid accumulation
+  // Clear previous logs
+  logEl.innerText = '';
+
+  // Extract username
+  const username = extractUsername(profileUrl);
+  if (!username) {
+    alert('Could not extract username from URL. Please use format: https://www.linkedin.com/in/username/');
+    return;
+  }
+
+  log(`Extracted username: ${username}`);
+
+  // Clear previous collected data
+  setStatus('Clearing previous data...');
   await new Promise((resolve) => {
     chrome.runtime.sendMessage({ action: 'CLEAR_COLLECTED' }, (resp) => {
-      console.log('[popup] CLEAR_COLLECTED response', resp);
-      resolve(resp);
+      console.log('[popup] CLEAR_COLLECTED response:', resp);
+      resolve();
     });
   });
 
-  const username = extractUsername(profileUrl);
-  console.log('[popup] extracted username=', username);
-  if (!username) return alert('Could not extract username from URL. Please paste a full profile URL (e.g. https://www.linkedin.com/in/username/)');
+  // Build analytics URLs
+  const urls = buildAnalyticsUrls(username);
+  log(`Prepared ${urls.length} analytics pages to scrape`);
 
   const openTabs = document.getElementById('openTabs').checked;
-  setStatus('Starting: building analytics URLs...');
-
-  const urls = buildAnalyticsUrls(username);
-  console.log('[popup] analytics urls:', urls);
-  setStatus(`Prepared ${urls.length} pages to open.`);
-
-  // clear previous collected state stored in background (optional)
-  await chrome.storage.local.set({ collected: {} });
-
-  // open each analytics page in background (inactive) and inject scraper after load
   const openedTabIds = [];
-  for (const url of urls) {
+
+  // Open each URL in a new tab
+  for (let i = 0; i < urls.length; i++) {
+    const url = urls[i];
+    setStatus(`Opening page ${i + 1}/${urls.length}...`);
+    
     try {
-      // `openTabs` checkbox means "open in background tabs (recommended)" —
-      // when checked we should open tabs inactive so the popup stays open.
-      const tab = await chrome.tabs.create({ url, active: openTabs ? false : true });
-      console.log('[popup] opened tab', tab.id, url);
+      // Open tab (inactive if checkbox is checked)
+      const tab = await chrome.tabs.create({ 
+        url, 
+        active: false 
+      });
+      
       openedTabIds.push(tab.id);
-      setStatus(`Opened ${url} in tab ${tab.id}. Waiting to load...`);
-      // naive wait: better: detect tab change to 'complete' via tabs.onUpdated, but quick approach:
-      await new Promise(res => setTimeout(res, 3000));
-      await injectScraper(tab.id);
-      console.log('[popup] injector called for tab', tab.id);
-      // allow the content script to run and send data
-      await new Promise(res => setTimeout(res, 2000));
-      // ask background to close the tab if we prefer background cleanup handled by scraper
-      if (!openTabs) {
-        try { await chrome.tabs.remove(tab.id); } catch(e){/*ignore*/ }
+      log(`Opened tab ${tab.id}: ${url}`);
+
+      // Wait for tab to load
+      setStatus(`Waiting for page ${i + 1}/${urls.length} to load...`);
+      const loaded = await waitForTabLoad(tab.id, 30000);
+      
+      if (!loaded) {
+        log(`⚠ Tab ${tab.id} may not have loaded completely`);
+      } else {
+        log(`✓ Tab ${tab.id} loaded successfully`);
       }
+
+      // Give scraper time to run
+      await new Promise(r => setTimeout(r, 3000));
+
     } catch (err) {
-      log('Error opening or injecting: ' + err.message);
-      console.error('[popup] error opening/injecting', err);
+      log(`✗ Error with tab: ${err.message}`);
+      console.error('[popup] Error:', err);
     }
   }
 
-  setStatus('Waiting for scrapers to send data (short pause)...');
-  // wait a few seconds for all content scripts to send messages
-  await new Promise(res => setTimeout(res, 2500));
+  // Wait for all scrapers to complete
+  setStatus('Waiting for data extraction to complete...');
+  log('Waiting 8 seconds for all scrapers to finish...');
+  await new Promise(r => setTimeout(r, 8000));
 
-  // request collected data from background
-  chrome.runtime.sendMessage({ action: 'GET_COLLECTED' }, (resp) => {
-    console.log('[popup] GET_COLLECTED response', resp);
+  // Get icon as data URL
+  const iconDataURL = await getIconAsDataURL();
+
+  // Retrieve collected data
+  setStatus('Retrieving scraped data...');
+  chrome.runtime.sendMessage({ action: 'GET_COLLECTED' }, async (resp) => {
+    console.log('[popup] GET_COLLECTED response:', resp);
+
     if (!resp || resp.status !== 'ok') {
-      setStatus('Could not fetch collected data. Try again or check console.');
+      setStatus('✗ Could not retrieve data. Check console for errors.');
+      log('Error: No data received from background script');
       return;
     }
+
     const collected = resp.collected || [];
-    setStatus(`Collected ${collected.length} data chunks. Building report...`);
-    // Build report HTML using ui/report-template.js createReportHtml(reportData)
-    // We'll create a blob and open in new tab
-    import('../report/report-template.js').then(mod => {
-      try {
-        const reportData = normalizeCollected(collected);
-        const html = mod.createReportHtml(reportData);
-        const blob = new Blob([html], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        chrome.tabs.create({ url, active: true }).then(() => {
-          console.log('[popup] report tab created');
-        }).catch(e => console.error('[popup] failed to open report tab', e));
-        setStatus('Report opened in new tab!');
-      } catch (e) {
-        setStatus('Failed to create report: ' + e.message);
+    log(`✓ Received ${collected.length} data chunks`);
+
+    if (collected.length === 0) {
+      setStatus('⚠ No data was scraped. Make sure you are logged into LinkedIn.');
+      log('Troubleshooting: Open the LinkedIn analytics pages manually and check if they load correctly.');
+      return;
+    }
+
+    // Build report
+    setStatus('Building report...');
+    log('Generating report HTML...');
+
+    try {
+      const mod = await import('../report/report-template.js');
+      const reportData = normalizeCollected(collected);
+      
+      console.log('[popup] Normalized data:', reportData);
+      
+      const html = mod.createReportHtml(reportData, iconDataURL);
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+
+      await chrome.tabs.create({ url, active: true });
+      
+      setStatus('✓ Report opened in new tab!');
+      log('Success! Your LinkedIn Wrapped report is ready.');
+
+      // Close the analytics tabs after report is successfully created
+      log('Cleaning up analytics tabs...');
+      for (const tabId of openedTabIds) {
+        try {
+          await chrome.tabs.remove(tabId);
+          log(`✓ Closed tab ${tabId}`);
+        } catch (e) {
+          // Tab may already be closed or no longer exist
+          log(`Tab ${tabId} already closed`);
+        }
       }
-    }).catch(err => {
-      setStatus('Failed to load report generator: ' + err);
-      console.error('[popup] failed to import report-template', err);
-    });
+      log('✓ Cleanup complete');
+      
+    } catch (e) {
+      setStatus('✗ Failed to create report');
+      log(`Error: ${e.message}`);
+      console.error('[popup] Report generation error:', e);
+    }
   });
 });
 
 helpBtn.addEventListener('click', () => {
-  console.log('[popup] help clicked');
-  alert('How this works:\n1) Paste your own LinkedIn profile url (must be logged in to LinkedIn in this browser).\n2) The extension opens LinkedIn analytics pages and runs a scraper inside them (this runs in your browser only).\n3) The extracted data is processed locally into a Spotify-style report.\nPrivacy: data is processed locally; no uploads unless you explicitly choose to share.');
+  const helpText = `How this works:
+
+1. Paste your LinkedIn profile URL (you must be logged into LinkedIn)
+2. Click "Start Scraping"
+3. The extension opens LinkedIn analytics pages in background tabs
+4. Data is extracted from these pages (runs locally in your browser)
+5. A Spotify-style report is generated from your data
+
+Privacy: All data processing happens locally in your browser. Nothing is uploaded anywhere unless you explicitly share it.
+
+Troubleshooting:
+- Make sure you're logged into LinkedIn
+- Check that you have analytics access (usually need to post content)
+- Try opening the analytics pages manually first to verify access`;
+
+  alert(helpText);
 });
 
 function normalizeCollected(collectedChunks) {
-  // collectedChunks is an array of objects returned by content scripts
-  // We will attempt to merge arrays into a single normalized object. Each content script
-  // should return { topPosts: [...], profileStats: {...}, ... } as available.
+  console.log('[popup] Normalizing', collectedChunks.length, 'chunks');
+  
   const posts = [];
   const stats = {};
-  collectedChunks.forEach(chunk => {
+
+  collectedChunks.forEach((chunk, i) => {
+    console.log(`[popup] Processing chunk ${i}:`, chunk);
+    
     if (!chunk) return;
-    if (chunk.topPosts && Array.isArray(chunk.topPosts)) posts.push(...chunk.topPosts);
-    if (chunk.profileStats) Object.assign(stats, chunk.profileStats);
-    if (chunk.other) {
-      if (!stats.other) stats.other = [];
-      stats.other.push(chunk.other);
+
+    // Collect posts
+    if (chunk.topPosts && Array.isArray(chunk.topPosts)) {
+      posts.push(...chunk.topPosts);
+    }
+
+    // Collect stats
+    if (chunk.profileStats) {
+      Object.assign(stats, chunk.profileStats);
     }
   });
 
-  return { posts, stats };
+  console.log('[popup] Normalized:', { posts: posts.length, stats });
+
+  return {
+    topPosts: posts,
+    profileStats: stats
+  };
 }

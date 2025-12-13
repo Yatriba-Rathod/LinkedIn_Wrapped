@@ -1,11 +1,10 @@
 (function () {
   'use strict';
-  console.log('[scraper] start', location.href);
+  console.log('[scraper] START - URL:', location.href);
 
   const wait = ms => new Promise(r => setTimeout(r, ms));
   const nowISO = () => new Date().toISOString();
 
-  // Helper function if not already defined
   function parseNumber(s) {
     if (s === null || s === undefined) return null;
     const cleaned = String(s).replace(/[^\d\.\,]/g, '').replace(/,/g, '');
@@ -14,236 +13,290 @@
     return Number.isFinite(n) ? n : null;
   }
 
-  async function stabilize() {
-    for (let i = 0; i < 8; i++) {
+  async function waitForPageLoad() {
+    console.log('[scraper] Waiting for page load...');
+    // Wait for document ready
+    for (let i = 0; i < 10; i++) {
       if (document.readyState === 'complete') break;
-      await wait(1200);
+      await wait(1000);
     }
+    // Additional wait for dynamic content
     await wait(3000);
+    console.log('[scraper] Page load complete');
+  }
+
+  async function scrapeUntilStable(scrapeFn, { interval = 500, maxAttempts = 15, stableRounds = 2 } = {}) {
+    let last = null;
+    let stableCount = 0;
+
+    console.log('[scraper] Starting stable scrape...');
+    for (let i = 0; i < maxAttempts; i++) {
+      const current = scrapeFn();
+      const currentStr = JSON.stringify(current);
+      
+      console.log(`[scraper] Attempt ${i + 1}/${maxAttempts}:`, current);
+
+      if (currentStr === JSON.stringify(last)) {
+        stableCount++;
+        console.log(`[scraper] Stable count: ${stableCount}/${stableRounds}`);
+        if (stableCount >= stableRounds) {
+          console.log('[scraper] Data stable!');
+          return current;
+        }
+      } else {
+        stableCount = 0;
+        last = current;
+      }
+
+      await wait(interval);
+    }
+
+    console.log('[scraper] Max attempts reached, returning last data');
+    return last;
   }
 
   function parseTopPostsFromCreatorPage() {
+    console.log('[scraper] Parsing top posts...');
     const posts = [];
+    
+    // Look for post cards - these contain impressions/views text
     const candidateDivs = Array.from(document.querySelectorAll('div')).filter(div => {
       const t = (div.innerText || '').toLowerCase();
       return t.includes('impressions') || t.includes('views') || t.includes('engagement');
-    }).slice(0, 80);
+    }).slice(0, 30);
+
+    console.log('[scraper] Found', candidateDivs.length, 'candidate post divs');
 
     for (const card of candidateDivs) {
       try {
         const text = (card.innerText || '').trim();
         if (!text || text.length < 10) continue;
+
+        // Extract impressions
         const mImp = text.match(/([\d,\.]+)\s*(impressions|views)/i);
         const impressions = mImp ? parseNumber(mImp[1]) : null;
 
+        // Extract likes
         const likesEl = card.querySelector(
-          'button[data-reaction-details], button[aria-label*="reaction"], button[aria-label*="reactions"], .social-details-social-counts__count-value'
+          'button[data-reaction-details], button[aria-label*="reaction"], .social-details-social-counts__count-value'
         );
-        const likesLabel = likesEl?.getAttribute?.('aria-label') || likesEl?.innerText || '';
-        const likes = likesLabel ? parseNumber(likesLabel.match(/[\d,\.]+/)?.[0] ?? likesLabel) : null;
+        const likesText = likesEl?.getAttribute?.('aria-label') || likesEl?.innerText || '';
+        const likes = parseNumber(likesText.match(/[\d,\.]+/)?.[0]);
 
-        const commentsEl = card.querySelector('button[aria-label*="comment"], .comment-count, [data-test-comments-count]');
-        const commentsLabel = commentsEl?.getAttribute?.('aria-label') || commentsEl?.innerText || '';
-        const comments = commentsLabel ? parseNumber(commentsLabel.match(/[\d,\.]+/)?.[0] ?? commentsLabel) : null;
+        // Extract comments
+        const commentsEl = card.querySelector('button[aria-label*="comment"], .comment-count');
+        const commentsText = commentsEl?.getAttribute?.('aria-label') || commentsEl?.innerText || '';
+        const comments = parseNumber(commentsText.match(/[\d,\.]+/)?.[0]);
 
+        // Extract timestamp
         const timeEl = card.querySelector('time');
         const timestamp = timeEl?.getAttribute('datetime') || null;
+
+        // Get text snippet
         const snippetEl = card.querySelector('p, span') || card;
-        const snippet = (snippetEl?.innerText || text).slice(0, 500);
+        const snippet = (snippetEl?.innerText || text).slice(0, 300);
+
+        // Check for media
         const hasImg = !!card.querySelector('img');
         const hasVideo = !!card.querySelector('video');
 
-        posts.push({
-          sourceUrl: location.href,
-          scrapedAt: nowISO(),
-          text: snippet,
-          impressions,
-          likes,
-          comments,
-          timestamp,
-          media: hasVideo ? 'video' : hasImg ? 'image' : 'text'
-        });
-      } catch (e) { }
+        if (impressions || likes || comments) {
+          posts.push({
+            text: snippet,
+            impressions,
+            likes,
+            comments,
+            timestamp,
+            media: hasVideo ? 'video' : hasImg ? 'image' : 'text',
+            scrapedAt: nowISO()
+          });
+        }
+      } catch (e) {
+        console.error('[scraper] Error parsing post card:', e);
+      }
       if (posts.length >= 10) break;
     }
 
-    const out = [];
+    // Deduplicate
+    const unique = [];
     const seen = new Set();
     for (const p of posts) {
-      const key = (p.text || '').slice(0, 120) + '|' + (p.impressions || '') + '|' + (p.likes || '');
-      if (!seen.has(key)) { seen.add(key); out.push(p); }
+      const key = `${(p.text || '').slice(0, 100)}|${p.impressions}|${p.likes}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push(p);
+      }
     }
-    return out;
+
+    console.log('[scraper] Extracted', unique.length, 'unique posts');
+    return unique;
   }
 
   function parseContentImpressionsPage() {
+    console.log('[scraper] Parsing content impressions page...');
     const stats = {};
 
-    try {      
-      // Find the Discovery section
+    try {
+      // Find Discovery section header
       const allH2s = Array.from(document.querySelectorAll("h2"));
-      console.log("[scraper] Found h2 elements:", allH2s.length);
-      allH2s.forEach((h2, i) => console.log(`[scraper] h2[${i}]:`, h2.innerText.trim()));
+      console.log('[scraper] Found', allH2s.length, 'h2 elements');
       
-      const discoveryHeader = allH2s.find(h2 => h2.innerText.trim().toLowerCase() === "discovery");
+      const discoveryHeader = allH2s.find(h2 => 
+        h2.innerText.trim().toLowerCase() === "discovery"
+      );
 
       if (!discoveryHeader) {
-        console.log("[scraper] Discovery header not found");
+        console.log('[scraper] Discovery header not found');
         return stats;
       }
-      console.log("[scraper] Found Discovery header");
 
       const discoverySection = discoveryHeader.closest("section");
       if (!discoverySection) {
-        console.log("[scraper] Discovery section not found");
+        console.log('[scraper] Discovery section not found');
         return stats;
       }
-      console.log("[scraper] Found Discovery section");
 
-      const ul = discoverySection.querySelector("ul.member-analytics-addon-summary");
-      if (!ul) {
-        console.log("[scraper] Discovery UL not found");
-        // Try alternative: just look for any li items in the section
-        const allLis = discoverySection.querySelectorAll("li");
-        console.log("[scraper] Found", allLis.length, "li elements in section (without UL class)");
-        return stats;
-      }
-      console.log("[scraper] Found UL element");
+      // Find list items
+      const listItems = discoverySection.querySelectorAll("li");
+      console.log('[scraper] Found', listItems.length, 'list items');
 
-      const items = Array.from(
-        ul.querySelectorAll("li.member-analytics-addon-summary__list-item")
-      );
-
-      console.log("[scraper] found list items:", items.length);
-
-      items.forEach((li, index) => {
-        console.log(`[scraper] === Processing item ${index} ===`);
-        
-        // Try to find ANY p tag with a number-like value
-        const allPTags = li.querySelectorAll("p");
-        console.log(`[scraper] Item ${index} has ${allPTags.length} p tags`);
-        
-        allPTags.forEach((p, pIndex) => {
-          console.log(`[scraper] p[${pIndex}] classes:`, p.className);
-          console.log(`[scraper] p[${pIndex}] textContent:`, p.textContent.trim());
-          console.log(`[scraper] p[${pIndex}] innerHTML:`, p.innerHTML);
-        });
-
-        // Get the value - try multiple selectors
-        const valueP = li.querySelector(
-          "p.text-body-medium-bold, p.text-heading-large, p.text-body-medium-bold.pr1.text-heading-large, p[class*='text-heading']"
+      listItems.forEach((li, index) => {
+        // Get the value element
+        const valueEl = li.querySelector(
+          "p.text-body-medium-bold, p.text-heading-large, p[class*='text-heading'], p[class*='bold']"
         );
+        
+        if (!valueEl || valueEl.offsetParent === null) {
+          return; // Skip hidden elements
+        }
 
-        let raw = "";
-        if (valueP) {
-          // First try direct textContent
-          raw = valueP.textContent.trim();
-          
-          // If empty, try innerHTML and strip HTML comments
-          if (!raw) {
-            const innerHTML = valueP.innerHTML;
-            // Remove HTML comments: <!--something-->
-            raw = innerHTML.replace(/<!--\s*/g, '').replace(/\s*-->/g, '').trim();
-          }
-          
-          console.log("[scraper] raw value extracted:", raw);
-        } else {
-          console.log("[scraper] No value element found!");
+        // Extract value
+        let raw = valueEl.textContent.trim();
+        if (!raw) {
+          raw = valueEl.innerHTML.replace(/<!--.*?-->/g, '').trim();
         }
 
         const number = parseNumber(raw);
-        console.log("[scraper] parsed number:", number);
-
+        
         // Get the label
-        const labelP = li.querySelector(
+        const labelEl = li.querySelector(
           "p.member-analytics-addon-list-item__description, p[class*='description']"
         );
-
-        let label = "";
-        if (labelP) {
-          // Try textContent first
-          label = labelP.textContent.trim();
-          
-          // If empty, strip HTML comments from innerHTML
+        
+        let label = '';
+        if (labelEl) {
+          label = labelEl.textContent.trim();
           if (!label) {
-            const innerHTML = labelP.innerHTML;
-            label = innerHTML.replace(/<!--\s*/g, '').replace(/\s*-->/g, '').trim();
+            label = labelEl.innerHTML.replace(/<!--.*?-->/g, '').trim();
           }
-          console.log("[scraper] raw label:", label);
-        } else {
-          console.log("[scraper] No label element found!");
-        }
-
-        label = label.toLowerCase();
-
-        console.log("[scraper] extracted:", { label, raw, number });
-
-        if (!number) {
-          console.log("[scraper] skipping - no valid number");
-          return;
         }
         
-        if (!label) {
-          console.log("[scraper] WARNING: no label but have number:", number);
+        label = label.toLowerCase();
+
+        console.log(`[scraper] Item ${index}: label="${label}" value=${number}`);
+
+        // Skip invalid data
+        if (!number || number <= 0 || Number.isNaN(number)) {
+          return;
         }
 
-        // More flexible matching
+        // Match labels
         if (label.includes("impression") || label.includes("total impression")) {
           stats.impressions = number;
-          console.log("[scraper] SET impressions:", number);
-        }
-        else if (label.includes("members reached") || label.includes("reached")) {
+        } else if (label.includes("members reached") || label.includes("reached")) {
           stats.membersReached = number;
-          console.log("[scraper] SET membersReached:", number);
-        }
-        // Fallback: if we haven't set impressions yet and this is the first item
-        else if (!stats.impressions && index === 0) {
+        } else if (!stats.impressions && index === 0) {
+          // Fallback: first item is likely impressions
           stats.impressions = number;
-          console.log("[scraper] SET impressions (fallback first item):", number);
-        }
-        // Fallback: if we have impressions but not members reached, and this is second item
-        else if (stats.impressions && !stats.membersReached && index === 1) {
+        } else if (stats.impressions && !stats.membersReached && index === 1) {
+          // Fallback: second item is likely members reached
           stats.membersReached = number;
-          console.log("[scraper] SET membersReached (fallback second item):", number);
         }
       });
 
-      console.log("[scraper] === FINAL DISCOVERY STATS ===", stats);
+      console.log('[scraper] Final stats:', stats);
       return stats;
     } catch (err) {
-      console.error("[scraper] error in parseContentImpressionsPage:", err);
+      console.error('[scraper] Error in parseContentImpressionsPage:', err);
       return stats;
     }
   }
 
+  async function sendDataToBackground(payload) {
+    return new Promise((resolve) => {
+      console.log('[scraper] Sending data to background:', payload);
+      
+      if (!chrome?.runtime?.sendMessage) {
+        console.error('[scraper] chrome.runtime.sendMessage not available');
+        resolve(false);
+        return;
+      }
+
+      chrome.runtime.sendMessage(
+        {
+          action: 'SCRAPED_DATA',
+          data: payload,
+          fromUrl: location.href,
+          closeTab: false // Don't auto-close, let popup handle it
+        },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            console.error('[scraper] Error sending message:', chrome.runtime.lastError);
+            resolve(false);
+          } else {
+            console.log('[scraper] Message sent successfully:', response);
+            resolve(true);
+          }
+        }
+      );
+    });
+  }
+
   (async function run() {
-    await stabilize();
+    console.log('[scraper] Running scraper...');
+    
+    await waitForPageLoad();
+    
     const url = location.href;
-    const payload = { scrapedFrom: url, scrapedAt: nowISO(), topPosts: [], profileStats: {}, meta: {} };
+    const payload = {
+      scrapedFrom: url,
+      scrapedAt: nowISO(),
+      topPosts: [],
+      profileStats: {},
+      meta: {}
+    };
 
     try {
       if (url.includes('/analytics/creator/top-posts')) {
+        console.log('[scraper] Detected: top-posts page');
         payload.topPosts = parseTopPostsFromCreatorPage();
         payload.meta.page = 'creator-top-posts';
       } else if (url.includes('/analytics/creator/content')) {
-        payload.profileStats = parseContentImpressionsPage();
+        console.log('[scraper] Detected: content impressions page');
+        payload.profileStats = await scrapeUntilStable(parseContentImpressionsPage, {
+          interval: 800,
+          maxAttempts: 15,
+          stableRounds: 2
+        });
         payload.meta.page = 'creator-content-impressions';
       } else {
+        console.log('[scraper] Detected: fallback page');
         payload.topPosts = parseTopPostsFromCreatorPage();
         payload.meta.page = 'fallback';
       }
-      console.log('[scraper] extracted', payload);
+
+      console.log('[scraper] Extraction complete:', payload);
     } catch (err) {
-      console.error('[scraper] extraction error', err);
+      console.error('[scraper] Extraction error:', err);
       payload.error = String(err);
     }
 
-    try {
-      chrome.runtime.sendMessage({ action: 'SCRAPED_DATA', data: payload, fromUrl: location.href, closeTab: true }, resp => {
-        console.log('[scraper] sent to background', resp);
-      });
-    } catch (e) {
-      console.error('[scraper] sendMessage failed', e);
+    // Send data to background
+    const sent = await sendDataToBackground(payload);
+    if (sent) {
+      console.log('[scraper] ✓ Data sent successfully');
+    } else {
+      console.error('[scraper] ✗ Failed to send data');
     }
   })();
 })();

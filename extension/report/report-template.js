@@ -6,7 +6,7 @@ function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]); });
 }
 
-export function createReportHtml(reportData) {
+export function createReportHtml(reportData, iconDataURL = null) {
   console.log('[report-template] createReportHtml called', reportData);
   const posts = reportData?.posts || reportData?.topPosts || [];
   const profileStats = reportData?.stats || reportData?.profileStats || {};
@@ -59,6 +59,11 @@ export function createReportHtml(reportData) {
     `));
   }
 
+  // Create icon HTML if available
+  const iconHtml = iconDataURL 
+    ? `<img src="${escapeHtml(iconDataURL)}" alt="LinkedIn Wrapped" class="w-16 h-16 mr-4" />`
+    : '';
+
   const html = `<!doctype html>
   <html>
   <head>
@@ -74,9 +79,12 @@ export function createReportHtml(reportData) {
   </head>
   <body>
     <div class="card">
-      <div class="mb-8">
-        <div class="top-title">Your LinkedIn Wrapped</div>
-        <div class="text-slate-300 mt-2">A snapshot of your activity (data extracted from pages you opened)</div>
+      <div class="mb-8 flex items-center">
+        ${iconHtml}
+        <div>
+          <div class="top-title">Your LinkedIn Wrapped</div>
+          <div class="text-slate-300 mt-2">A snapshot of your activity (data extracted from pages you opened)</div>
+        </div>
       </div>
 
       <div>
