@@ -6,45 +6,6 @@ function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]); });
 }
 
-// function cleanPostText(text) {
-//   if (!text) return '';
-
-//   //Common UI elements to remove
-//   const uiArtifacts = [
-//     'Skip to search',
-//     'Skip to main content',
-//     'Skip navigation',
-//     'Main Feed',
-//     'See all comments',
-//     'Load more comments',
-//     'Translate',
-//     'Report this post',
-//     'Send this article',
-//     'Like',
-//     'Comment',
-//     'Repost',
-//     'Send',
-//     'Celebrate',
-//     'Support',
-//     'Love',
-//     'Insightful',
-//     'Curious'
-//   ];
-//   let cleaned = text;
-//   uiArtifacts.forEach(artifact => {
-//     const regex = new RegExp(artifact, 'gi');
-//     cleaned = cleaned.replace(regex, '');
-//   });
-
-//   // Remove excessive whitespace and newlines
-//   cleaned = cleaned.replace(/\s+/g, ' ').trim();
-  
-//   // Remove leading/trailing punctuation from cleaning
-//   cleaned = cleaned.replace(/^[,.\s]+|[,.\s]+$/g, '');
-
-//   return cleaned;
-// }
-
 export function createReportHtml(reportData, iconDataURL = null) {
   console.log('[report-template] createReportHtml called', reportData);
   const posts = reportData?.posts || reportData?.topPosts || [];
@@ -94,8 +55,6 @@ export function createReportHtml(reportData, iconDataURL = null) {
   // Top post
   if (mostImpressions) {
     const p = mostImpressions;
-    // const cleanedText = cleanPostText(p.text || '');
-    // const postText = escapeHtml(cleanedText.slice(0, 280) || '');
     const impressionsTxt = numberWithCommas(p.impressions || 0);
     const likesTxt = numberWithCommas(p.likes || 0);
     const commentsTxt = numberWithCommas(p.comments || 0);

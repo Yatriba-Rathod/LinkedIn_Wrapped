@@ -147,16 +147,16 @@ startBtn.addEventListener('click', async () => {
       const loaded = await waitForTabLoad(tab.id, 30000);
       
       if (!loaded) {
-        log(`⚠ Tab ${tab.id} may not have loaded completely`);
+        log(`Tab ${tab.id} may not have loaded completely`);
       } else {
-        log(`✓ Tab ${tab.id} loaded successfully`);
+        log(`Tab ${tab.id} loaded successfully`);
       }
 
       // Give scraper time to run
       await new Promise(r => setTimeout(r, 3000));
 
     } catch (err) {
-      log(`✗ Error with tab: ${err.message}`);
+      log(`Error with tab: ${err.message}`);
       console.error('[popup] Error:', err);
     }
   }
@@ -175,16 +175,16 @@ startBtn.addEventListener('click', async () => {
     console.log('[popup] GET_COLLECTED response:', resp);
 
     if (!resp || resp.status !== 'ok') {
-      setStatus('✗ Could not retrieve data. Check console for errors.');
+      setStatus('Could not retrieve data. Check console for errors.');
       log('Error: No data received from background script');
       return;
     }
 
     const collected = resp.collected || [];
-    log(`✓ Received ${collected.length} data chunks`);
+    log(`Received ${collected.length} data chunks`);
 
     if (collected.length === 0) {
-      setStatus('⚠ No data was scraped. Make sure you are logged into LinkedIn.');
+      setStatus('No data was scraped. Make sure you are logged into LinkedIn.');
       log('Troubleshooting: Open the LinkedIn analytics pages manually and check if they load correctly.');
       return;
     }
@@ -205,7 +205,7 @@ startBtn.addEventListener('click', async () => {
 
       await chrome.tabs.create({ url, active: true });
       
-      setStatus('✓ Report opened in new tab!');
+      setStatus('Report opened in new tab!');
       log('Success! Your LinkedIn Wrapped report is ready.');
 
       // Close the analytics tabs after report is successfully created
@@ -213,16 +213,16 @@ startBtn.addEventListener('click', async () => {
       for (const tabId of openedTabIds) {
         try {
           await chrome.tabs.remove(tabId);
-          log(`✓ Closed tab ${tabId}`);
+          log(`Closed tab ${tabId}`);
         } catch (e) {
           // Tab may already be closed or no longer exist
           log(`Tab ${tabId} already closed`);
         }
       }
-      log('✓ Cleanup complete');
+      log('Cleanup complete');
       
     } catch (e) {
-      setStatus('✗ Failed to create report');
+      setStatus('Failed to create report');
       log(`Error: ${e.message}`);
       console.error('[popup] Report generation error:', e);
     }
