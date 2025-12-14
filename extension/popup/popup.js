@@ -75,7 +75,7 @@ async function waitForTabLoad(tabId, maxWait = 30000) {
 // Convert image to data URL
 async function getIconAsDataURL() {
   try {
-    const iconUrl = chrome.runtime.getURL('../assets/icons/icon128.png');
+    const iconUrl = chrome.runtime.getURL('../assets/icons/icon500.png');
     const response = await fetch(iconUrl);
     const blob = await response.blob();
     return new Promise((resolve, reject) => {
