@@ -237,7 +237,7 @@
           action: 'SCRAPED_DATA',
           data: payload,
           fromUrl: location.href,
-          closeTab: false // Don't auto-close, let popup handle it
+          closeTab: false
         },
         (response) => {
           if (chrome.runtime.lastError) {
