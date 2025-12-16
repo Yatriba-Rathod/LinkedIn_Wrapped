@@ -144,7 +144,7 @@ startBtn.addEventListener('click', async () => {
 
       // Wait for tab to load
       setStatus(`Waiting for page ${i + 1}/${urls.length} to load...`);
-      const loaded = await waitForTabLoad(tab.id, 30000);
+      const loaded = await waitForTabLoad(tab.id, 15000);
       
       if (!loaded) {
         log(`Tab ${tab.id} may not have loaded completely`);
@@ -164,7 +164,7 @@ startBtn.addEventListener('click', async () => {
   // Wait for all scrapers to complete
   setStatus('Waiting for data extraction to complete...');
   log('Waiting 8 seconds for all scrapers to finish...');
-  await new Promise(r => setTimeout(r, 8000));
+  await new Promise(r => setTimeout(r, 5000));
 
   // Get icon as data URL
   const iconDataURL = await getIconAsDataURL();
