@@ -12,7 +12,7 @@
 5. Ensure you're logged into LinkedIn in this browser
 
 ## Basic Flow
-1. Click the extension icon → paste your LinkedIn profile URL → click "Generate my Wrap"
+1. Click the extension icon → paste your LinkedIn profile URL → click "Generate My Wrap"
 2. The extension will open LinkedIn analytics pages in tabs (or background) and run scrapers
 3. When finished, it opens a new tab with your Wrapped report
 4. No Node.js, npm, or build tools required. The extension runs entirely locally.

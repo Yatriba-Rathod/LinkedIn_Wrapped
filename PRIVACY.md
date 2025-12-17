@@ -1,6 +1,6 @@
 # Privacy Policy
 
-_Last updated: December 13, 2025_
+_Last updated: December 17, 2025_
 
 ## Introduction
 LinkedIn Wrap Bot is a browser extension that helps users generate insights and summaries from their own LinkedIn analytics. We are committed to protecting your privacy and minimizing data usage.

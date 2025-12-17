@@ -46,7 +46,7 @@ function buildAnalyticsUrls(username) {
 // Wait for a tab to finish loading
 async function waitForTabLoad(tabId, maxWait = 30000) {
   const startTime = Date.now();
-  
+
   return new Promise((resolve) => {
     const checkStatus = () => {
       chrome.tabs.get(tabId, (tab) => {
@@ -67,7 +67,7 @@ async function waitForTabLoad(tabId, maxWait = 30000) {
         }
       });
     };
-    
+
     checkStatus();
   });
 }
@@ -92,7 +92,7 @@ async function getIconAsDataURL() {
 
 startBtn.addEventListener('click', async () => {
   console.log('[popup] Start button clicked');
-  
+
   const profileUrl = document.getElementById('profileUrl').value.trim();
   if (!profileUrl) {
     alert('Please paste your LinkedIn profile URL.');
@@ -124,28 +124,27 @@ startBtn.addEventListener('click', async () => {
   const urls = buildAnalyticsUrls(username);
   log(`Prepared ${urls.length} analytics pages to scrape`);
 
-  const openTabs = document.getElementById('openTabs').checked;
   const openedTabIds = [];
 
   // Open each URL in a new tab
   for (let i = 0; i < urls.length; i++) {
     const url = urls[i];
     setStatus(`Opening page ${i + 1}/${urls.length}...`);
-    
+
     try {
-      // Open tab (inactive if checkbox is checked)
-      const tab = await chrome.tabs.create({ 
-        url, 
-        active: false 
+      // Always open tabs in background (active tabs would close the popup)
+      const tab = await chrome.tabs.create({
+        url,
+        active: false
       });
-      
+
       openedTabIds.push(tab.id);
       log(`Opened tab ${tab.id}: ${url}`);
 
       // Wait for tab to load
       setStatus(`Waiting for page ${i + 1}/${urls.length} to load...`);
       const loaded = await waitForTabLoad(tab.id, 15000);
-      
+
       if (!loaded) {
         log(`Tab ${tab.id} may not have loaded completely`);
       } else {
@@ -193,20 +192,26 @@ startBtn.addEventListener('click', async () => {
     setStatus('Building report...');
     log('Generating report HTML...');
 
-    try {
-      const mod = await import('../report/report-template.js');
-      const reportData = normalizeCollected(collected);
-      
-      console.log('[popup] Normalized data:', reportData);
-      
-      const html = mod.createReportHtml(reportData, iconDataURL);
-      const blob = new Blob([html], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
 
-      await chrome.tabs.create({ url, active: true });
-      
+    try {
+      const mod = await import('../report/report.js');
+      const reportData = normalizeCollected(collected);
+
+      console.log('[popup] Normalized data:', reportData);
+
+      // Save report data to storage so report.html can access it
+      await chrome.storage.local.set({
+        reportData: reportData,
+        iconDataURL: iconDataURL
+      });
+
+      // Open the report page (extension URL, not blob)
+      const reportUrl = chrome.runtime.getURL('report/report.html');
+      await chrome.tabs.create({ url: reportUrl, active: true });
+
       setStatus('Report opened in new tab!');
-      log('Success! Your LinkedIn Wrapped report is ready.');
+      log('Success! Your LinkedIn Wrapped 2025 report is ready.');
+
 
       // Close the analytics tabs after report is successfully created
       log('Cleaning up analytics tabs...');
@@ -220,7 +225,7 @@ startBtn.addEventListener('click', async () => {
         }
       }
       log('Cleanup complete');
-      
+
     } catch (e) {
       setStatus('Failed to create report');
       log(`Error: ${e.message}`);
@@ -233,10 +238,10 @@ helpBtn.addEventListener('click', () => {
   const helpText = `How this works:
 
 1. Paste your LinkedIn profile URL (you must be logged into LinkedIn)
-2. Click "Start Scraping"
+2. Click "Generate My Wrap"
 3. The extension opens LinkedIn analytics pages in background tabs
 4. Data is extracted from these pages (runs locally in your browser)
-5. A Spotify-style report is generated from your data
+5. A report is generated from your data
 
 Privacy: All data processing happens locally in your browser. Nothing is uploaded anywhere unless you explicitly share it.
 
@@ -250,13 +255,13 @@ Troubleshooting:
 
 function normalizeCollected(collectedChunks) {
   console.log('[popup] Normalizing', collectedChunks.length, 'chunks');
-  
+
   const posts = [];
   const stats = {};
 
   collectedChunks.forEach((chunk, i) => {
     console.log(`[popup] Processing chunk ${i}:`, chunk);
-    
+
     if (!chunk) return;
 
     // Collect posts
