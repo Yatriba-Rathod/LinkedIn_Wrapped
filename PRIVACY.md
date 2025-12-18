@@ -41,8 +41,8 @@ Communication occurs only between extension components (content scripts, backgro
 
 ## Permissions
 The extension may request:
-- **Active Tab / Scripting** – to read analytics data from the LinkedIn page you are viewing
-- **Storage** – to save reports or preferences locally
+- **Active Tab / Scripting** - to read analytics data from the LinkedIn page you are viewing
+- **Storage** - to save reports or preferences locally
 
 These permissions are used strictly for core functionality.
 
