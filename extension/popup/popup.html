@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>LinkedIn Wrapped 2025</title>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a;
+      color: #f1f5f9;
+      min-width: 360px;
+      padding: 16px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .header img {
+      width: 40px;
+      height: 40px;
+    }
+
+    .header-content {
+      flex: 1;
+    }
+
+    .header h1 {
+      font-size: 18px;
+      font-weight: 800;
+      line-height: 1.2;
+      margin: 0;
+    }
+
+    .header p {
+      font-size: 12px;
+      color: #94a3b8;
+      line-height: 1.2;
+      margin: 0;
+    }
+
+    .form-group {
+      margin-top: 16px;
+    }
+
+    label {
+      display: block;
+      font-size: 14px;
+      color: #cbd5e1;
+      margin-bottom: 8px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 8px;
+      border-radius: 6px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #f1f5f9;
+      font-size: 14px;
+    }
+
+    input[type="text"]:focus {
+      outline: none;
+      border-color: #6366f1;
+    }
+
+    .info-box {
+      margin-top: 12px;
+      padding: 10px 12px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      font-size: 13px;
+      color: #cbd5e1;
+    }
+
+    .info-box p {
+      margin: 0;
+      line-height: 1.4;
+    }
+
+    .button-group {
+      margin-top: 16px;
+      display: flex;
+      gap: 8px;
+    }
+
+    button {
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: background 0.2s;
+    }
+
+    #start {
+      flex: 1;
+      background: #6366f1;
+      color: white;
+    }
+
+    #start:hover {
+      background: #4f46e5;
+    }
+
+    #start:disabled {
+      background: #475569;
+      cursor: not-allowed;
+    }
+
+    #help {
+      padding: 10px 12px;
+      background: transparent;
+      border: 1px solid #334155;
+      color: #cbd5e1;
+    }
+
+    #help:hover {
+      background: #1e293b;
+    }
+
+    #status {
+      margin-top: 12px;
+      font-size: 14px;
+      color: #cbd5e1;
+    }
+
+    #log {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #94a3b8;
+      max-height: 160px;
+      overflow-y: auto;
+    }
+
+    .privacy {
+      margin-top: 16px;
+      font-size: 11px;
+      color: #64748b;
+      line-height: 1.4;
+    }
+
+    .privacy strong {
+      color: #94a3b8;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="header">
+    <img src="../assets/icons/icon48.png" alt="LinkedIn Wrapped Icon" />
+    <div class="header-content">
+      <h1>LinkedIn Wrapped 2025</h1>
+      <p>Generate your year-in-review (user-triggered)</p>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label for="profileUrl">LinkedIn profile URL</label>
+    <input id="profileUrl" type="text" placeholder="https://www.linkedin.com/in/username/" />
+  </div>
+
+  <div class="info-box">
+    <p>This will open analytics pages in background tabs to collect your data.</p>
+  </div>
+
+  <div class="button-group">
+    <button id="start">Generate My Wrap</button>
+    <button id="help">Help</button>
+  </div>
+
+  <div id="status"></div>
+  <div id="log"></div>
+
+  <div class="privacy">
+    <strong>Privacy:</strong> Data is read only from pages you open and is processed locally. No data is uploaded unless
+    you opt in. See extension listing for more details.
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+
+</html>

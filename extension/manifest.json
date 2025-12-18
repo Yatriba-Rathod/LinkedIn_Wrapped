@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "LinkedIn Wrapped 2025",
+  "version": "1.0.0",
+  "description": "Generate a year-in-review for your LinkedIn activity (user-triggered; data extracted from link you provide).",
+  "icons": {
+    "16": "assets/icons/icon48.png",
+    "48": "assets/icons/icon128.png",
+    "128": "assets/icons/icon500.png"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "assets/icons/icon48.png",
+      "48": "assets/icons/icon128.png",
+      "128": "assets/icons/icon500.png"
+    }
+  },
+  "permissions": [
+    "scripting",
+    "tabs",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://www.linkedin.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.linkedin.com/analytics/*"
+      ],
+      "js": [
+        "analytics-scraper.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
