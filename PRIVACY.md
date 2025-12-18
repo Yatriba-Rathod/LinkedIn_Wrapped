@@ -53,8 +53,10 @@ You remain in full control:
 - You can clear stored data via browser settings
 - Uninstalling the extension removes all stored data
 
-## LinkedIn Disclaimer
+## LinkedIn Disclaimer & User Responsibility
 LinkedIn Wrap Bot is an independent project and is not affiliated with, endorsed by, or sponsored by LinkedIn. Use of LinkedIn remains subject to LinkedIn’s own Terms and Privacy Policy.
+
+**Use at your own risk.** Automated scraping of LinkedIn data may be a violation of LinkedIn's User Agreement. You are solely responsible for any consequences resulting from the use of this extension, including but not limited to account restrictions, suspensions, or other actions taken by LinkedIn.
 
 ## Policy Updates
 This Privacy Policy may be updated as features evolve. Any changes will be reflected in this file with an updated revision date.
